@@ -1,0 +1,15 @@
+# VS Code
+.vscode/
+*.code-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local environment (in case you add .env later)
+.env
+*.env
+
+# Logs
+*.log
+npm-debug.log*
