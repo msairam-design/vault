@@ -14,6 +14,7 @@ DROP POLICY IF EXISTS "vaults_delete" ON vaults CASCADE;
 
 DROP POLICY IF EXISTS "shares_select" ON vault_shares CASCADE;
 DROP POLICY IF EXISTS "shares_insert" ON vault_shares CASCADE;
+DROP POLICY IF EXISTS "shares_update" ON vault_shares CASCADE;
 DROP POLICY IF EXISTS "shares_delete" ON vault_shares CASCADE;
 
 DROP POLICY IF EXISTS "items_select" ON vault_items CASCADE;
@@ -29,6 +30,7 @@ DROP FUNCTION IF EXISTS public.is_vault_owner(uuid) CASCADE;
 DROP FUNCTION IF EXISTS public.is_vault_shared(uuid) CASCADE;
 DROP FUNCTION IF EXISTS public.can_access_vault(uuid) CASCADE;
 DROP FUNCTION IF EXISTS public.can_manage_share(uuid) CASCADE;
+DROP FUNCTION IF EXISTS public.has_vault_permission(uuid, text) CASCADE;
 
 -- Drop Tables
 DROP TABLE IF EXISTS public.vault_items CASCADE;
@@ -50,17 +52,17 @@ CREATE TABLE public.vaults (
     created_at timestamptz DEFAULT now()
 );
 
--- 2b. VAULT SHARES (Who has access)
+-- 2b. VAULT SHARES (Who has access) - permission column stores CRUDS strings
 CREATE TABLE public.vault_shares (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     vault_id uuid NOT NULL REFERENCES public.vaults(id) ON DELETE CASCADE,
     shared_with_email text NOT NULL,
-    permission text DEFAULT 'read',
+    permission text DEFAULT 'R',
     created_at timestamptz DEFAULT now(),
     UNIQUE(vault_id, shared_with_email)
 );
 
--- 2c. VAULT ITEMS (The actual passwords)
+-- 2c. VAULT ITEMS
 CREATE TABLE public.vault_items (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -80,7 +82,7 @@ CREATE TABLE public.vault_items (
     updated_at timestamptz DEFAULT now()
 );
 
--- 2d. FAMILY SECRETS (The 24 labels)
+-- 2d. FAMILY SECRETS
 CREATE TABLE public.family_secrets (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     label text NOT NULL UNIQUE,
@@ -88,7 +90,7 @@ CREATE TABLE public.family_secrets (
 );
 
 -- ============================================
--- 3. CREATE HELPER FUNCTIONS (Security Definer)
+-- 3. CREATE HELPER FUNCTIONS
 -- ============================================
 
 -- Check if user OWNS the vault
@@ -130,6 +132,19 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
 
+-- NEW: Check if user has a specific CRUDS permission on a vault
+CREATE OR REPLACE FUNCTION public.has_vault_permission(v_id uuid, required_permission text)
+RETURNS boolean AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.vault_shares vs 
+    WHERE vs.vault_id = v_id 
+    AND vs.shared_with_email = (auth.jwt() ->> 'email')
+    AND vs.permission LIKE '%' || required_permission || '%'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+
 -- ============================================
 -- 4. ENABLE ROW LEVEL SECURITY
 -- ============================================
@@ -160,39 +175,69 @@ CREATE POLICY "vaults_delete" ON public.vaults
   FOR DELETE TO authenticated
   USING (public.is_vault_owner(id));
 
--- 5b. SHARES Policies
+-- 5b. SHARES Policies (Granular CRUDS)
 CREATE POLICY "shares_select" ON public.vault_shares
   FOR SELECT TO authenticated
   USING (
     public.is_vault_owner(vault_id) OR 
-    shared_with_email = (auth.jwt() ->> 'email')
+    shared_with_email = (auth.jwt() ->> 'email') OR
+    public.has_vault_permission(vault_id, 'S')
   );
 
 CREATE POLICY "shares_insert" ON public.vault_shares
   FOR INSERT TO authenticated
-  WITH CHECK (public.is_vault_owner(vault_id));
+  WITH CHECK (
+    public.is_vault_owner(vault_id) OR 
+    public.has_vault_permission(vault_id, 'S')
+  );
+
+CREATE POLICY "shares_update" ON public.vault_shares
+  FOR UPDATE TO authenticated
+  USING (
+    public.is_vault_owner(vault_id) OR 
+    public.has_vault_permission(vault_id, 'S')
+  )
+  WITH CHECK (
+    public.is_vault_owner(vault_id) OR 
+    public.has_vault_permission(vault_id, 'S')
+  );
 
 CREATE POLICY "shares_delete" ON public.vault_shares
   FOR DELETE TO authenticated
-  USING (public.is_vault_owner(vault_id));
+  USING (
+    public.is_vault_owner(vault_id) OR 
+    public.has_vault_permission(vault_id, 'S')
+  );
 
--- 5c. ITEMS Policies
+-- 5c. ITEMS Policies (Granular CRUDS)
 CREATE POLICY "items_select" ON public.vault_items
   FOR SELECT TO authenticated
   USING (public.can_access_vault(vault_id));
 
 CREATE POLICY "items_insert" ON public.vault_items
   FOR INSERT TO authenticated
-  WITH CHECK (public.is_vault_owner(vault_id));
+  WITH CHECK (
+    public.is_vault_owner(vault_id) OR 
+    public.has_vault_permission(vault_id, 'C')
+  );
 
 CREATE POLICY "items_update" ON public.vault_items
   FOR UPDATE TO authenticated
-  USING (public.is_vault_owner(vault_id))
-  WITH CHECK (public.is_vault_owner(vault_id));
+  USING (
+    public.is_vault_owner(vault_id) OR 
+    public.has_vault_permission(vault_id, 'U')
+  )
+  WITH CHECK (
+    public.is_vault_owner(vault_id) OR 
+    public.has_vault_permission(vault_id, 'U')
+  );
 
 CREATE POLICY "items_delete" ON public.vault_items
   FOR DELETE TO authenticated
-  USING (public.is_vault_owner(vault_id));
+  USING (
+    public.is_vault_owner(vault_id) OR 
+    public.has_vault_permission(vault_id, 'D')
+  );
 
 -- 5d. FAMILY SECRETS Policies
 CREATE POLICY "family_secrets_select" ON public.family_secrets
@@ -215,7 +260,7 @@ INSERT INTO public.family_secrets (label) VALUES
 ON CONFLICT (label) DO NOTHING;
 
 -- ============================================
--- 7. CREATE INDEXES FOR PERFORMANCE
+-- 7. CREATE INDEXES
 -- ============================================
 CREATE INDEX idx_vaults_user_id ON public.vaults(user_id);
 CREATE INDEX idx_vault_shares_vault_id ON public.vault_shares(vault_id);

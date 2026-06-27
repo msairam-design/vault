@@ -144,12 +144,66 @@ const SUPABASE\_ANON\_KEY = 'YOUR\_ANON\_KEY\_HERE';
 
 > \*\*Note:\*\* The password field is intentionally blank for security. You only need to type a new password if you are changing it.
 
-### Step 10: Share a Vault
+### Step 10: Share a Vault with Granular Permissions (CRUDS)
 
-1. On the vault card, click **"Share"**.
-2. Enter the email address of a family member (they must have signed up first).
-3. Click **"Add User"**.
-4. When they log in, the shared vault will appear in their dashboard.
+When you share a vault, you can assign granular permissions to each user. The available permissions are:
+
+Permission	What it allows
+C (Create)	Can add new passwords to the vault
+R (Read)	Can view passwords (always ON for all shared users)
+U (Update)	Can edit existing passwords
+D (Delete)	Can delete passwords
+S (Share)	Can share the vault with others
+How to share:
+
+On the vault card, click "Share".
+
+Enter the email address of a family member (they must have signed up first).
+
+Select the permissions you want to grant using the checkboxes:
+
+C (Create) – Let them add new passwords.
+
+R (Read) – Always enabled (mandatory).
+
+U (Update) – Let them edit passwords.
+
+D (Delete) – Let them delete passwords.
+
+S (Share) – Let them share the vault with others.
+
+Click "Add User".
+
+When they log in, the shared vault will appear in their dashboard with buttons based on their permissions.
+
+Viewing and Editing Permissions:
+
+As the vault Owner, you can view all shared users and their permissions.
+
+Click the ✏️ Edit button next to any user to change their permissions.
+
+Click the ✕ Remove button to revoke their access entirely.
+
+Important Rules:
+
+Only the Owner can delete the vault itself.
+
+Users with "S" (Share) permission can see and manage all shares for that vault.
+
+"R" (Read) is always enabled and cannot be turned off.
+
+If a user removes their own "S" permission, they will no longer see the "Share" button on the vault.
+
+Also update the "Features" section at the top of the README to mention granular permissions:
+
+Sharing & Collaboration (Updated)
+Vault-Level Sharing – Share entire vaults with family members by email.
+
+Granular Permissions (CRUDS) – Assign specific permissions: Create, Read, Update, Delete, and Share.
+
+Permission Management – Owners can edit or revoke permissions at any time.
+
+
 
 \---
 
