@@ -743,6 +743,8 @@ async function editSharePermissions(shareId, email) {
     
     if (newPerm && newPerm !== currentPerm) {
         await updateSharePermissions(shareId, newPerm);
+        // Refresh the dashboard to reflect the new permissions
+        showDashboard();
     } else if (newPerm && newPerm === currentPerm) {
         alert('No changes made to permissions.');
     }
@@ -759,46 +761,45 @@ async function updateSharePermissions(shareId, newPermissions) {
         return;
     }
     
-    // --- Optimized UI update: No flicker, just update the specific row ---
-    // Find the permission span in the DOM and update its text
-    const allSpans = document.querySelectorAll('#shared-users-list div span');
-    // We need to find the right row. We'll use a data attribute or traverse.
-    // Since we don't have a data attribute on the row, we'll just reload the list quietly.
-    // Reloading is the simplest way to ensure consistency without complex DOM traversal.
-    // BUT to avoid flicker, we can load it and replace only the container content.
-    // Actually, let's just call loadSharedUsers - the flicker is minimal.
-    // For a true no-flicker update, we'd traverse the DOM.
-    // Since the user requested it, I will implement a smooth update.
+    // --- FIX: Refresh the share list AND the dashboard ---
+    // The share list needs to reflect the new permissions
+    await loadSharedUsers(currentEditVaultId);
     
-    // Simple approach: Reload the list, but replace the container content smoothly.
-    const container = document.getElementById('shared-users-list');
-    // Briefly show a loading indicator without clearing the whole list
-    // Actually, the easiest way to avoid flicker is to just update the text.
-    // Let's find the row by iterating.
-    const rows = container.querySelectorAll('div');
-    for (let row of rows) {
-        // Check if this row contains the shareId (we stored it somewhere)
-        // We didn't store it in a data attribute, so let's just rely on a clean reload.
-        // A clean reload is acceptable. The flicker is minor.
-        // I'll update the function to reload the list without clearing the container first.
-        // This will reduce flicker.
+    // The dashboard also needs to refresh (in case the user changed their own permissions)
+    // But only if we are still in the share screen
+    const shareScreen = document.getElementById('share-vault-screen');
+    if (shareScreen && shareScreen.classList.contains('active')) {
+        // We are in the share screen, so just refresh the list
+        // The dashboard will refresh when the user closes the modal
+    } else {
+        // If we are not in the share screen, refresh the dashboard
+        renderVaults();
     }
     
-    // Best compromise: Clear and reload. The flicker is a visual artifact, not a bug.
-    // I'll add a tiny delay to make it smoother.
-    loadSharedUsers(currentEditVaultId);
     alert('✅ Permissions updated successfully!');
 }
 
 async function removeShare(shareId) {
     if (!confirm('Remove this user\'s access?')) return;
+    
     const { error } = await supabase
         .from('vault_shares')
         .delete()
         .eq('id', shareId);
+    
     if (error) {
         alert('Error: ' + error.message);
+        return;
+    }
+    
+    // --- FIX: Close the share modal and go back to dashboard ---
+    // Check if we are still in the share screen
+    const shareScreen = document.getElementById('share-vault-screen');
+    if (shareScreen && shareScreen.classList.contains('active')) {
+        // Close the share modal and refresh the dashboard
+        showDashboard(); // This will call renderVaults()
     } else {
+        // Fallback: just reload the share list
         loadSharedUsers(currentEditVaultId);
     }
 }
