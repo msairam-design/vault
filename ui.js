@@ -1,12 +1,6 @@
 // ============================================
-// UI RENDERER & DECRYPT LOGIC (24 Labels)
+// UI RENDERER & DECRYPT LOGIC (Hold-to-View Eye, Dark Mode)
 // ============================================
-
-// --- Rate Limiting Variables ---
-
-let decryptAttempts = parseInt(sessionStorage.getItem('decryptAttempts') || '0');
-let decryptLockoutUntil = parseInt(sessionStorage.getItem('decryptLockoutUntil') || '0');
-let revealTimer = null;
 
 // --- UTILITY: Safe text sanitization ---
 function safeHtml(text) {
@@ -20,7 +14,7 @@ async function showDashboard() {
     await renderVaults();
 }
 
-// --- RENDER VAULTS (Uses secret_label instead of question_id) ---
+// --- RENDER VAULTS ---
 async function renderVaults() {
     const container = document.getElementById('vault-list');
     container.innerHTML = '<div class="empty-state">Loading...</div>';
@@ -119,7 +113,7 @@ async function renderVaults() {
     }
 }
 
-// --- TOGGLE VAULT EXPANSION (Uses secret_label) ---
+// --- TOGGLE VAULT EXPANSION ---
 async function toggleVault(vaultId) {
     const itemsContainer = document.getElementById(`items-${vaultId}`);
     if (!itemsContainer) return;
@@ -145,7 +139,6 @@ async function toggleVault(vaultId) {
 
     let html = '';
     items.forEach(item => {
-        // Use secret_label instead of question_id
         const label = item.secret_label || 'Unknown';
         const safeTitle = safeHtml(item.title);
         const safeUsername = safeHtml(item.username || '');
@@ -160,6 +153,7 @@ async function toggleVault(vaultId) {
             </div>
             <div class="pw-actions">
                 <button class="show-btn" data-item-id="${item.id}" data-label="${safeLabel}">Show</button>
+                <button class="edit-btn" data-item-id="${item.id}" style="background:#f59e0b;">✏️</button>
                 <button class="del-btn" data-item-id="${item.id}">✕</button>
             </div>
         </div>`;
@@ -167,15 +161,14 @@ async function toggleVault(vaultId) {
     itemsContainer.innerHTML = html;
 }
 
-// ===== DECRYPT LOGIC (Shows: "Enter the 8-digit [LABEL]") =====
+// ===== DECRYPT LOGIC (Hold-to-View Eye) =====
 function openDecrypt(itemId, label) {
-    if (Date.now() < decryptLockoutUntil) {
+    if (decryptLockoutUntil && Date.now() < decryptLockoutUntil) {
         const remaining = Math.ceil((decryptLockoutUntil - Date.now()) / 1000);
         alert(`⛔ Too many failed attempts. Locked for ${remaining} seconds.`);
         return;
     }
     currentDecryptItemId = itemId;
-    // Display the label without the word "code" or "question"
     document.getElementById('decrypt-question-text').innerHTML = `Enter the 8-digit <strong>${safeHtml(label)}</strong>`;
     document.getElementById('decrypt-input').value = '';
     document.getElementById('decrypt-overlay').style.display = 'flex';
@@ -189,7 +182,7 @@ function closeDecrypt() {
 }
 
 async function confirmDecrypt() {
-    if (Date.now() < decryptLockoutUntil) {
+    if (decryptLockoutUntil && Date.now() < decryptLockoutUntil) {
         const remaining = Math.ceil((decryptLockoutUntil - Date.now()) / 1000);
         alert(`⛔ Too many failed attempts. Locked for ${remaining} seconds.`);
         closeDecrypt();
@@ -222,22 +215,10 @@ async function confirmDecrypt() {
         decryptAttempts = 0;
         sessionStorage.setItem('decryptAttempts', '0');
         
-        document.getElementById('reveal-password').textContent = plain;
+        revealedPlainText = plain;
+        document.getElementById('reveal-password').textContent = '••••••••';
         document.getElementById('reveal-modal').style.display = 'flex';
         closeDecrypt();
-        
-        if (revealTimer) clearTimeout(revealTimer);
-        let secondsLeft = 30;
-        document.getElementById('reveal-timer-text').textContent = `Auto-clear in ${secondsLeft} seconds...`;
-        revealTimer = setInterval(() => {
-            secondsLeft--;
-            if (secondsLeft <= 0) {
-                clearInterval(revealTimer);
-                closeRevealModal();
-            } else {
-                document.getElementById('reveal-timer-text').textContent = `Auto-clear in ${secondsLeft} seconds...`;
-            }
-        }, 1000);
 
     } catch (e) {
         decryptAttempts++;
@@ -255,28 +236,28 @@ async function confirmDecrypt() {
 
 function closeRevealModal() {
     document.getElementById('reveal-modal').style.display = 'none';
-    document.getElementById('reveal-password').textContent = '';
+    revealedPlainText = '';
+    document.getElementById('reveal-password').textContent = '••••••••';
     if (revealTimer) {
-        clearInterval(revealTimer);
+        clearTimeout(revealTimer);
         revealTimer = null;
     }
-    document.getElementById('reveal-timer-text').textContent = 'Auto-clear in 30 seconds...';
 }
 
 function copyPasswordToClipboard() {
-    const pwd = document.getElementById('reveal-password').textContent;
-    if (pwd && pwd !== 'PASSWORD') {
-        navigator.clipboard.writeText(pwd).then(() => {
-            alert('✅ Password copied!');
-        }).catch(() => {
-            const textArea = document.createElement('textarea');
-            textArea.value = pwd;
-            document.body.appendChild(textArea);
-            textArea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textArea);
-            alert('✅ Password copied!');
-        });
+    if (revealedPlainText) {
+        navigator.clipboard.writeText(revealedPlainText)
+            .then(() => alert('✅ Password copied!'))
+            .catch(() => {
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = revealedPlainText;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                alert('✅ Password copied!');
+            });
     }
 }
 
@@ -296,7 +277,7 @@ document.addEventListener('keydown', resetTimer);
 
 document.addEventListener('visibilitychange', () => {
     if (document.hidden && currentUser) {
-        logout(); // Lock immediately on tab/app switch
+        logout();
     }
 });
 
@@ -304,7 +285,7 @@ document.addEventListener('visibilitychange', () => {
 // GLOBAL EVENT DELEGATION
 // ============================================
 document.addEventListener('click', function(e) {
-    // 1. Vault Header Toggle
+    // Vault Header Toggle
     const header = e.target.closest('.vault-header');
     if (header && !e.target.closest('.vault-actions')) {
         const vaultId = header.dataset.vaultId;
@@ -312,7 +293,7 @@ document.addEventListener('click', function(e) {
         return;
     }
 
-    // 2. Share Button
+    // Share Button
     const shareBtn = e.target.closest('.share-btn');
     if (shareBtn) {
         const vaultId = shareBtn.dataset.vaultId;
@@ -321,7 +302,7 @@ document.addEventListener('click', function(e) {
         return;
     }
 
-    // 3. Add Item Button
+    // Add Item Button
     const addBtn = e.target.closest('.add-item-btn');
     if (addBtn) {
         const vaultId = addBtn.dataset.vaultId;
@@ -329,7 +310,7 @@ document.addEventListener('click', function(e) {
         return;
     }
 
-    // 4. Delete Vault Button
+    // Delete Vault Button
     const delVaultBtn = e.target.closest('.delete-vault-btn');
     if (delVaultBtn) {
         const vaultId = delVaultBtn.dataset.vaultId;
@@ -337,7 +318,7 @@ document.addEventListener('click', function(e) {
         return;
     }
 
-    // 5. Show Password Button
+    // Show Password Button
     const showBtn = e.target.closest('.show-btn');
     if (showBtn) {
         const itemId = showBtn.dataset.itemId;
@@ -346,7 +327,15 @@ document.addEventListener('click', function(e) {
         return;
     }
 
-    // 6. Delete Password Button
+    // Edit Password Button
+    const editBtn = e.target.closest('.edit-btn');
+    if (editBtn) {
+        const itemId = editBtn.dataset.itemId;
+        if (itemId) editPassword(itemId);
+        return;
+    }
+
+    // Delete Password Button
     const delBtn = e.target.closest('.del-btn');
     if (delBtn) {
         const itemId = delBtn.dataset.itemId;
@@ -354,7 +343,7 @@ document.addEventListener('click', function(e) {
         return;
     }
 
-    // 7. Share Removal (delegated)
+    // Share Removal
     const removeShare = e.target.closest('.remove-share');
     if (removeShare) {
         const shareId = removeShare.dataset.shareId;
@@ -363,9 +352,78 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// ============================================
-// STATIC UI BUTTON EVENT BINDINGS
-// ============================================
+// ===== EYE BUTTON: HOLD TO VIEW =====
+document.addEventListener('DOMContentLoaded', function() {
+    const eyeBtn = document.getElementById('reveal-eye-btn');
+    if (eyeBtn) {
+        // Mouse events
+        eyeBtn.addEventListener('mousedown', function(e) {
+            e.preventDefault();
+            document.getElementById('reveal-password').textContent = revealedPlainText || '••••••••';
+        });
+        eyeBtn.addEventListener('mouseup', function() {
+            document.getElementById('reveal-password').textContent = '••••••••';
+        });
+        eyeBtn.addEventListener('mouseleave', function() {
+            document.getElementById('reveal-password').textContent = '••••••••';
+        });
+        // Touch events for mobile
+        eyeBtn.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            document.getElementById('reveal-password').textContent = revealedPlainText || '••••••••';
+        });
+        eyeBtn.addEventListener('touchend', function() {
+            document.getElementById('reveal-password').textContent = '••••••••';
+        });
+        eyeBtn.addEventListener('touchcancel', function() {
+            document.getElementById('reveal-password').textContent = '••••••••';
+        });
+    }
+
+    // Copy button
+    document.getElementById('reveal-copy-btn')?.addEventListener('click', copyPasswordToClipboard);
+    
+    // Close reveal modal
+    document.getElementById('close-reveal-btn')?.addEventListener('click', closeRevealModal);
+    document.getElementById('close-reveal-btn-2')?.addEventListener('click', closeRevealModal);
+
+    // Edit authorization validation
+    document.getElementById('edit-current-secret')?.addEventListener('input', validateEditAuthorization);
+    document.getElementById('edit-change-secret-checkbox')?.addEventListener('change', toggleEditSecretChange);
+    document.getElementById('edit-new-secret')?.addEventListener('input', validateNewSecretMatch);
+    document.getElementById('edit-new-secret-confirm')?.addEventListener('input', validateNewSecretMatch);
+
+    // CSV Import
+    document.getElementById('csv-file-input')?.addEventListener('change', handleCsvFileUpload);
+    document.getElementById('csv-start-import-btn')?.addEventListener('click', startCsvImport);
+    document.getElementById('csv-close-btn')?.addEventListener('click', closeCsvImport);
+    document.getElementById('csv-cancel-btn')?.addEventListener('click', closeCsvImport);
+
+    // Restore Backup
+    document.getElementById('restore-file-input')?.addEventListener('change', handleRestoreFileUpload);
+    document.getElementById('restore-prefix-input')?.addEventListener('input', validateRestorePrefix);
+    document.getElementById('restore-start-btn')?.addEventListener('click', startRestoreBackup);
+    document.getElementById('restore-close-btn')?.addEventListener('click', closeRestoreBackup);
+    document.getElementById('restore-cancel-btn')?.addEventListener('click', closeRestoreBackup);
+
+    // Dark Mode Toggle
+    const themeToggle = document.getElementById('theme-toggle');
+    if (themeToggle) {
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        if (savedTheme === 'dark') {
+            document.body.classList.add('dark-mode');
+            themeToggle.textContent = '☀️';
+        }
+        themeToggle.addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+            const isDark = document.body.classList.contains('dark-mode');
+            themeToggle.textContent = isDark ? '☀️' : '🌙';
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        });
+    }
+});
+
+// ===== STATIC UI BUTTON EVENT BINDINGS =====
 document.addEventListener('DOMContentLoaded', function() {
     // Login Screen
     document.getElementById('login-btn')?.addEventListener('click', login);
@@ -383,6 +441,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Dashboard
     document.getElementById('logout-btn')?.addEventListener('click', logout);
     document.getElementById('create-vault-btn')?.addEventListener('click', showCreateVault);
+    document.getElementById('export-backup-btn')?.addEventListener('click', exportBackup);
+    document.getElementById('restore-backup-btn')?.addEventListener('click', showRestoreBackup);
+    document.getElementById('import-csv-btn')?.addEventListener('click', showCsvImport);
     
     // Create Vault
     document.getElementById('confirm-create-vault-btn')?.addEventListener('click', createVault);
@@ -404,10 +465,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Decrypt Overlay
     document.getElementById('confirm-decrypt-btn')?.addEventListener('click', confirmDecrypt);
     document.getElementById('cancel-decrypt-btn')?.addEventListener('click', closeDecrypt);
-    
-    // Reveal Modal
-    document.getElementById('copy-password-btn')?.addEventListener('click', copyPasswordToClipboard);
-    document.getElementById('close-reveal-btn')?.addEventListener('click', closeRevealModal);
 
     // Enter key support
     document.getElementById('login-password')?.addEventListener('keydown', (e) => {

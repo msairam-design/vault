@@ -1,50 +1,109 @@
+/* ===== ROOT VARIABLES (Light Mode Default) ===== */
+:root {
+  --bg: #f1f5f9;
+  --app-bg: #ffffff;
+  --text: #0f172a;
+  --subtext: #64748b;
+  --border: #e2e8f0;
+  --card-bg: #f8fafc;
+  --input-bg: #f8fafc;
+  --shadow: 0 8px 30px rgba(0,0,0,0.08);
+  --badge-private: #dbeafe;
+  --badge-private-text: #1d4ed8;
+  --badge-shared: #fce7f3;
+  --badge-shared-text: #be185d;
+  --btn-primary: #3b82f6;
+  --btn-primary-hover: #2563eb;
+  --btn-success: #22c55e;
+  --btn-success-hover: #16a34a;
+  --btn-danger: #ef4444;
+  --btn-danger-hover: #dc2626;
+  --btn-warning: #f59e0b;
+  --btn-warning-hover: #d97706;
+  --btn-purple: #8b5cf6;
+  --btn-purple-hover: #7c3aed;
+}
+
+/* ===== DARK MODE OVERRIDES ===== */
+body.dark-mode {
+  --bg: #0f172a;
+  --app-bg: #1e293b;
+  --text: #f1f5f9;
+  --subtext: #94a3b8;
+  --border: #334155;
+  --card-bg: #334155;
+  --input-bg: #1e293b;
+  --shadow: 0 8px 30px rgba(0,0,0,0.4);
+  --badge-private: #1e3a5f;
+  --badge-private-text: #60a5fa;
+  --badge-shared: #4c1d3b;
+  --badge-shared-text: #f472b6;
+}
+
+/* ===== GLOBAL ===== */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { 
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: #f1f5f9;
+    background: var(--bg);
+    color: var(--text);
     display: flex;
     justify-content: center;
     align-items: center;
     min-height: 100vh;
     margin: 0;
     padding: 12px;
+    transition: background 0.3s, color 0.3s;
 }
 #app { 
     width: 100%;
     max-width: 480px;
-    background: white;
+    background: var(--app-bg);
     border-radius: 20px;
     padding: 16px 18px;
-    box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+    box-shadow: var(--shadow);
     min-height: 500px;
     max-height: 95vh;
     overflow-y: auto;
     position: relative;
+    transition: background 0.3s, box-shadow 0.3s;
 }
 .screen { display: none; }
 .screen.active { display: block; }
 
 h1 { font-size: 24px; text-align: center; margin-bottom: 4px; }
 h2 { font-size: 20px; margin-bottom: 12px; }
-.subtitle { text-align: center; color: #64748b; margin-bottom: 20px; font-size: 14px; }
+.subtitle { text-align: center; color: var(--subtext); margin-bottom: 20px; font-size: 14px; }
 
-input, select {
+input, select, textarea {
     width: 100%;
     padding: 10px 14px;
     margin: 6px 0;
-    border: 1.5px solid #e2e8f0;
+    border: 1.5px solid var(--border);
     border-radius: 10px;
     font-size: 15px;
-    background: #f8fafc;
+    background: var(--input-bg);
+    color: var(--text);
+    transition: border-color 0.2s, background 0.3s, color 0.3s;
 }
-input:focus, select:focus { border-color: #3b82f6; outline: none; background: white; }
+input:focus, select:focus, textarea:focus { 
+    border-color: var(--btn-primary); 
+    outline: none; 
+    background: var(--app-bg);
+}
+textarea { min-height: 60px; resize: vertical; font-family: inherit; }
 
-label { font-size: 13px; font-weight: 600; color: #1e293b; margin-top: 10px; display: block; }
+label { 
+    font-size: 13px; 
+    font-weight: 600; 
+    color: var(--text); 
+    margin-top: 10px; 
+    display: block; 
+}
 
 button {
     width: 100%;
     padding: 12px;
-    background: #3b82f6;
+    background: var(--btn-primary);
     color: white;
     border: none;
     border-radius: 10px;
@@ -52,15 +111,17 @@ button {
     font-weight: 600;
     cursor: pointer;
     margin: 6px 0;
-    transition: 0.15s;
+    transition: background 0.15s, opacity 0.15s;
 }
-button:hover { background: #2563eb; }
-.cancel-btn { background: #e2e8f0; color: #1e293b; }
+button:hover { background: var(--btn-primary-hover); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.cancel-btn { background: var(--border); color: var(--text); }
 .cancel-btn:hover { background: #cbd5e1; }
-.logout-btn { background: #ef4444; padding: 6px 14px; width: auto; font-size: 13px; margin: 0; }
-.logout-btn:hover { background: #dc2626; }
-.add-btn { background: #22c55e; padding: 10px; font-size: 14px; }
-.add-btn:hover { background: #16a34a; }
+.logout-btn { background: var(--btn-danger); padding: 6px 14px; width: auto; font-size: 13px; margin: 0; }
+.logout-btn:hover { background: var(--btn-danger-hover); }
+.add-btn { background: var(--btn-success); padding: 10px; font-size: 14px; }
+.add-btn:hover { background: var(--btn-success-hover); }
 
 .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
 .button-row { display: flex; gap: 8px; }
@@ -68,20 +129,38 @@ button:hover { background: #2563eb; }
 
 .switch-link { 
     text-align: center; 
-    color: #3b82f6; 
+    color: var(--btn-primary); 
     margin-top: 10px; 
     cursor: pointer; 
     font-size: 14px;
     text-decoration: underline;
 }
 
+.theme-toggle { 
+    background: transparent; 
+    border: 1px solid var(--border); 
+    border-radius: 50%; 
+    width: 36px; 
+    height: 36px; 
+    font-size: 18px; 
+    cursor: pointer; 
+    margin: 0;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text);
+}
+.theme-toggle:hover { background: var(--border); }
+
 /* ===== VAULT ACCORDION ===== */
 .vault-card {
-    background: #f8fafc;
+    background: var(--card-bg);
     border-radius: 12px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--border);
     margin-bottom: 8px;
     overflow: hidden;
+    transition: background 0.3s, border-color 0.3s;
 }
 .vault-header {
     padding: 10px 14px;
@@ -89,19 +168,19 @@ button:hover { background: #2563eb; }
     justify-content: space-between;
     align-items: center;
     cursor: pointer;
-    background: white;
-    transition: 0.1s;
+    background: var(--app-bg);
+    transition: background 0.15s;
 }
-.vault-header:hover { background: #f1f5f9; }
+.vault-header:hover { background: var(--card-bg); }
 .vault-header .vault-name { font-weight: 600; font-size: 15px; }
 .vault-header .vault-badge {
     font-size: 11px;
-    background: #dbeafe;
-    color: #1d4ed8;
+    background: var(--badge-private);
+    color: var(--badge-private-text);
     padding: 2px 10px;
     border-radius: 20px;
 }
-.vault-actions { display: flex; gap: 6px; }
+.vault-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .vault-actions button { 
     width: auto; 
     padding: 4px 10px; 
@@ -109,33 +188,38 @@ button:hover { background: #2563eb; }
     margin: 0; 
     border-radius: 6px;
 }
-.vault-actions .share-btn { background: #8b5cf6; }
-.vault-actions .share-btn:hover { background: #7c3aed; }
-.vault-actions .add-item-btn { background: #22c55e; }
-.vault-actions .add-item-btn:hover { background: #16a34a; }
+.vault-actions .share-btn { background: var(--btn-purple); }
+.vault-actions .share-btn:hover { background: var(--btn-purple-hover); }
+.vault-actions .add-item-btn { background: var(--btn-success); }
+.vault-actions .add-item-btn:hover { background: var(--btn-success-hover); }
+.vault-actions .edit-vault-btn { background: var(--btn-warning); }
+.vault-actions .edit-vault-btn:hover { background: var(--btn-warning-hover); }
+.vault-actions .delete-vault-btn { background: var(--btn-danger); }
+.vault-actions .delete-vault-btn:hover { background: var(--btn-danger-hover); }
 
 .vault-items {
     padding: 6px 12px 12px 12px;
-    display: none; /* hidden by default, shown when expanded */
+    display: none;
 }
 .vault-items.expanded { display: block; }
 
-/* ===== PASSWORD ITEMS (inside vault) ===== */
+/* ===== PASSWORD ITEMS ===== */
 .pw-item {
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 8px 10px;
     margin: 4px 0;
-    background: white;
+    background: var(--app-bg);
     border-radius: 8px;
-    border: 1px solid #f1f5f9;
+    border: 1px solid var(--border);
     font-size: 14px;
+    transition: background 0.3s, border-color 0.3s;
 }
 .pw-item .pw-info { flex: 1; min-width: 0; }
 .pw-item .pw-title { font-weight: 500; }
-.pw-item .pw-detail { font-size: 12px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pw-item .pw-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.pw-item .pw-detail { font-size: 12px; color: var(--subtext); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pw-item .pw-actions { display: flex; gap: 4px; flex-shrink: 0; flex-wrap: wrap; }
 .pw-item .pw-actions button { 
     width: auto; 
     padding: 2px 10px; 
@@ -143,38 +227,106 @@ button:hover { background: #2563eb; }
     margin: 0; 
     border-radius: 4px;
 }
-.pw-item .pw-actions .show-btn { background: #3b82f6; }
-.pw-item .pw-actions .show-btn:hover { background: #2563eb; }
-.pw-item .pw-actions .del-btn { background: #ef4444; }
-.pw-item .pw-actions .del-btn:hover { background: #dc2626; }
+.pw-item .pw-actions .show-btn { background: var(--btn-primary); }
+.pw-item .pw-actions .show-btn:hover { background: var(--btn-primary-hover); }
+.pw-item .pw-actions .edit-btn { background: var(--btn-warning); }
+.pw-item .pw-actions .edit-btn:hover { background: var(--btn-warning-hover); }
+.pw-item .pw-actions .del-btn { background: var(--btn-danger); }
+.pw-item .pw-actions .del-btn:hover { background: var(--btn-danger-hover); }
 
-.empty-state { text-align: center; padding: 20px 0; color: #94a3b8; font-size: 14px; }
+.empty-state { text-align: center; padding: 20px 0; color: var(--subtext); font-size: 14px; }
 
-/* ===== DECRYPT OVERLAY ===== */
+/* ===== DECRYPT OVERLAY / MODALS ===== */
 .decrypt-box {
-    background: white;
+    background: var(--app-bg);
     padding: 24px 20px;
     border-radius: 20px;
-    max-width: 340px;
+    max-width: 380px;
     width: 90%;
     text-align: center;
+    color: var(--text);
 }
 .decrypt-box h3 { margin-bottom: 6px; }
-.decrypt-box p { margin-bottom: 12px; color: #1e293b; }
+.decrypt-box p { margin-bottom: 12px; color: var(--text); }
 .decrypt-box input { text-align: center; font-size: 20px; letter-spacing: 4px; }
 
 /* ===== SHARED USERS LIST ===== */
 .shared-user-tag {
     display: inline-block;
-    background: #e2e8f0;
+    background: var(--card-bg);
     padding: 4px 12px;
     border-radius: 20px;
     margin: 4px 6px 4px 0;
     font-size: 13px;
+    color: var(--text);
+    border: 1px solid var(--border);
 }
 .shared-user-tag .remove-share {
     cursor: pointer;
-    color: #ef4444;
+    color: var(--btn-danger);
     margin-left: 6px;
     font-weight: bold;
+}
+
+/* ===== CSV TEMPLATE TABLE ===== */
+.csv-preview-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin: 8px 0;
+}
+.csv-preview-table th,
+.csv-preview-table td {
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    text-align: left;
+}
+.csv-preview-table th { 
+    background: var(--card-bg); 
+    font-weight: 600;
+}
+.csv-preview-table .mandatory { color: #ef4444; }
+.csv-preview-table .optional { color: var(--text); }
+
+/* ===== IMPORT / EXPORT BUTTONS ===== */
+.toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+.toolbar button {
+    flex: 1;
+    min-width: 80px;
+    padding: 8px 12px;
+    font-size: 13px;
+    margin: 0;
+}
+.toolbar .backup-btn { background: var(--btn-warning); }
+.toolbar .backup-btn:hover { background: var(--btn-warning-hover); }
+.toolbar .restore-btn { background: var(--btn-purple); }
+.toolbar .restore-btn:hover { background: var(--btn-purple-hover); }
+.toolbar .csv-btn { background: var(--btn-success); }
+.toolbar .csv-btn:hover { background: var(--btn-success-hover); }
+
+/* ===== REVEAL MODAL EYE BUTTON ===== */
+#reveal-eye-btn {
+    flex: 0.5;
+    font-size: 24px;
+    background: var(--btn-primary);
+    padding: 8px;
+    min-width: 50px;
+}
+#reveal-eye-btn:hover { background: var(--btn-primary-hover); }
+#reveal-copy-btn { flex: 1; }
+#close-reveal-btn { flex: 0.5; min-width: 40px; }
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 480px) {
+    #app { padding: 12px 14px; }
+    .toolbar button { font-size: 11px; padding: 6px 8px; min-width: 60px; }
+    .vault-actions button { font-size: 10px; padding: 2px 6px; }
+    .pw-item .pw-actions button { font-size: 10px; padding: 2px 6px; }
+    .csv-preview-table { font-size: 10px; }
+    .csv-preview-table th, .csv-preview-table td { padding: 4px 6px; }
 }

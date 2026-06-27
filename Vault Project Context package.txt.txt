@@ -1,0 +1,4 @@
+- vaults: SELECT via can_access_vault(), INSERT/UPDATE/DELETE only if owner
+- vault_shares: SELECT if owner OR shared_with_email matches, INSERT/DELETE only if owner
+- vault_items: SELECT via can_access_vault(), INSERT/UPDATE/DELETE only if vault owner
+- family_secrets: SELECT/INSERT/UPDATE for all authenticated users

@@ -53,6 +53,33 @@ async function resetPassword() {
 }
 
 function logout() {
+    // 1. Hide all modals forcefully (to prevent them from staying on top of the login screen)
+    const modalIds = [
+        'decrypt-overlay', 
+        'reveal-modal', 
+        'csv-import-modal', 
+        'restore-modal',
+        'edit-auth-section' // Just in case it's left open
+    ];
+    modalIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    });
+
+    // 2. Clear any sensitive data from the reveal modal (so it doesn't show stale data)
+    const revealPwd = document.getElementById('reveal-password');
+    if (revealPwd) revealPwd.textContent = '••••••••';
+    
+    // 3. Reset the decrypt input if it's open
+    const decryptInput = document.getElementById('decrypt-input');
+    if (decryptInput) decryptInput.value = '';
+    
+    // 4. Clear the revealed plaintext variable (if it exists in the global scope)
+    if (typeof revealedPlainText !== 'undefined') {
+        revealedPlainText = '';
+    }
+
+    // 5. Sign out and show login
     supabase.auth.signOut();
     currentUser = null;
     showLogin();

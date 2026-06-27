@@ -21,8 +21,8 @@ DROP POLICY IF EXISTS "items_insert" ON vault_items CASCADE;
 DROP POLICY IF EXISTS "items_update" ON vault_items CASCADE;
 DROP POLICY IF EXISTS "items_delete" ON vault_items CASCADE;
 
-DROP POLICY IF EXISTS "Users can read family secrets" ON family_secrets CASCADE;
-DROP POLICY IF EXISTS "Users can manage family secrets" ON family_secrets CASCADE;
+DROP POLICY IF EXISTS "family_secrets_select" ON family_secrets CASCADE;
+DROP POLICY IF EXISTS "family_secrets_manage" ON family_secrets CASCADE;
 
 -- Drop Functions
 DROP FUNCTION IF EXISTS public.is_vault_owner(uuid) CASCADE;
@@ -69,7 +69,8 @@ CREATE TABLE public.vault_items (
     url text,
     phone text,
     email_associated text,
-    username text,
+    username text NOT NULL,
+    notes text,
     encrypted_password text NOT NULL,
     iv text NOT NULL,
     salt text NOT NULL,

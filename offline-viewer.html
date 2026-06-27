@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offline Vault Viewer</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f1f5f9; padding: 20px; max-width: 800px; margin: 0 auto; }
+        h1 { text-align: center; margin-bottom: 20px; color: #0f172a; }
+        .card { background: white; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .card h3 { margin-bottom: 8px; }
+        .card .meta { font-size: 13px; color: #64748b; }
+        .vault-item { border-left: 3px solid #3b82f6; padding-left: 12px; margin: 8px 0; }
+        .vault-item .title { font-weight: 600; }
+        .vault-item .detail { font-size: 13px; color: #64748b; }
+        .btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; margin-top: 8px; }
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+        .decrypt-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); justify-content: center; align-items: center; z-index: 1000; }
+        .decrypt-modal .modal-content { background: white; padding: 24px; border-radius: 12px; max-width: 360px; width: 90%; text-align: center; }
+        .decrypt-modal input { width: 100%; padding: 10px; margin: 8px 0; border: 1.5px solid #e2e8f0; border-radius: 8px; font-size: 18px; letter-spacing: 4px; text-align: center; }
+        .decrypt-modal .button-row { display: flex; gap: 8px; margin-top: 8px; }
+        .decrypt-modal .button-row button { flex: 1; padding: 10px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
+        .file-upload { border: 2px dashed #e2e8f0; border-radius: 12px; padding: 30px; text-align: center; cursor: pointer; transition: border-color 0.2s; }
+        .file-upload:hover { border-color: #3b82f6; }
+        .file-upload input { display: none; }
+        .revealed { background: #f0fdf4; padding: 8px 12px; border-radius: 6px; border: 1px solid #22c55e; margin-top: 8px; word-break: break-all; font-family: monospace; font-size: 18px; }
+        .hidden { background: #f8fafc; padding: 8px 12px; border-radius: 6px; border: 1px solid #e2e8f0; margin-top: 8px; letter-spacing: 4px; font-family: monospace; font-size: 18px; color: #94a3b8; }
+        .eye-btn { background: none; border: none; font-size: 20px; cursor: pointer; padding: 4px 8px; }
+        .copy-btn { background: #22c55e; color: white; border: none; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .copy-btn:hover { background: #16a34a; }
+    </style>
+</head>
+<body>
+
+    <h1>🔐 Offline Vault Viewer</h1>
+    <p style="text-align:center; color:#64748b; margin-bottom:20px;">Load a backup JSON file to view your vaults offline.</p>
+
+    <div class="card" id="upload-section">
+        <div class="file-upload" onclick="document.getElementById('file-input').click()">
+            <div style="font-size: 48px;">📂</div>
+            <p style="margin-top:8px;">Click to select a JSON backup file</p>
+            <input type="file" id="file-input" accept=".json" onchange="loadBackup(event)">
+        </div>
+    </div>
+
+    <div id="vault-container"></div>
+
+    <!-- Decrypt Modal -->
+    <div class="decrypt-modal" id="decrypt-modal">
+        <div class="modal-content">
+            <h3>🔐 Enter Secret</h3>
+            <p id="decrypt-label" style="font-weight:bold; font-size:18px; margin:8px 0;">Enter the 8-digit SLEK</p>
+            <input type="password" id="decrypt-input" placeholder="8 digits" inputmode="numeric" maxlength="8">
+            <div class="button-row">
+                <button class="btn btn-danger" onclick="closeDecrypt()">Cancel</button>
+                <button class="btn btn-primary" onclick="confirmDecrypt()">Decrypt</button>
+            </div>
+            <p style="font-size:12px; color:#94a3b8; margin-top:8px;">👁️ Hold the eye to view after decrypting.</p>
+        </div>
+    </div>
+
+    <script>
+        let backupData = null;
+        let currentDecryptItem = null;
+        let revealedPlainText = '';
+
+        async function loadBackup(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    backupData = JSON.parse(e.target.result);
+                    renderVaults(backupData);
+                } catch (err) {
+                    alert('Error loading backup: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function renderVaults(data) {
+            const container = document.getElementById('vault-container');
+            container.innerHTML = '';
+            
+            // Show summary
+            const summary = document.createElement('div');
+            summary.className = 'card';
+            summary.innerHTML = `
+                <h3>📊 Backup Summary</h3>
+                <p class="meta">📁 Vaults: ${data.vaults.length} | 🔑 Items: ${data.items.length}</p>
+                <p class="meta">📅 Exported: ${data.exported_at || 'Unknown'}</p>
+                <p class="meta">👤 User: ${data.user_email || 'Unknown'}</p>
+            `;
+            container.appendChild(summary);
+            
+            // Group items by vault
+            const vaultMap = {};
+            data.vaults.forEach(v => { vaultMap[v.id] = { ...v, items: [] }; });
+            data.items.forEach(i => {
+                if (vaultMap[i.vault_id]) {
+                    vaultMap[i.vault_id].items.push(i);
+                }
+            });
+            
+            // Render each vault
+            Object.values(vaultMap).forEach(vault => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                
+                let itemsHtml = '';
+                vault.items.forEach(item => {
+                    const label = item.secret_label || 'Unknown';
+                    itemsHtml += `
+                        <div class="vault-item">
+                            <div class="title">${item.title}</div>
+                            <div class="detail">${item.username || ''} ${item.url ? '| ' + item.url : ''}</div>
+                            <div class="detail" style="font-size:11px; color:#94a3b8;">🔑 ${label}</div>
+                            <button class="btn btn-primary" onclick="openDecrypt('${item.id}')">Show Password</button>
+                        </div>
+                    `;
+                });
+                
+                if (vault.items.length === 0) {
+                    itemsHtml = '<p style="color:#94a3b8; font-size:14px;">No passwords in this vault.</p>';
+                }
+                
+                card.innerHTML = `
+                    <h3>📁 ${vault.name}</h3>
+                    <p class="meta">${vault.items.length} passwords</p>
+                    ${itemsHtml}
+                `;
+                container.appendChild(card);
+            });
+            
+            // Store items for decryption
+            window._items = data.items;
+        }
+
+        function openDecrypt(itemId) {
+            const item = window._items.find(i => i.id === itemId);
+            if (!item) { alert('Item not found.'); return; }
+            currentDecryptItem = item;
+            document.getElementById('decrypt-label').innerHTML = `Enter the 8-digit <strong>${item.secret_label || 'Unknown'}</strong>`;
+            document.getElementById('decrypt-input').value = '';
+            document.getElementById('decrypt-modal').style.display = 'flex';
+            document.getElementById('decrypt-input').focus();
+            revealedPlainText = '';
+        }
+
+        function closeDecrypt() {
+            document.getElementById('decrypt-modal').style.display = 'none';
+            currentDecryptItem = null;
+            revealedPlainText = '';
+        }
+
+        async function confirmDecrypt() {
+            if (!currentDecryptItem) return;
+            const secret = document.getElementById('decrypt-input').value.replace(/[^0-9]/g, '');
+            if (secret.length !== 8) {
+                alert('Must be exactly 8 digits.');
+                return;
+            }
+            
+            try {
+                // We need to re-implement PBKDF2 here since we can't use encryption.js
+                // We'll use the Web Crypto API directly
+                const plain = await decryptOffline(currentDecryptItem.encrypted_password, secret, currentDecryptItem.salt);
+                revealedPlainText = plain;
+                alert('🔓 Password: ' + plain);
+                closeDecrypt();
+            } catch (e) {
+                alert('❌ Incorrect 8-digit number!');
+            }
+        }
+
+        // Standalone decrypt function using Web Crypto API
+        async function decryptOffline(cipherBase64, secretNumber, salt) {
+            // PBKDF2
+            const encoder = new TextEncoder();
+            const baseKey = await crypto.subtle.importKey(
+                'raw',
+                encoder.encode(secretNumber),
+                'PBKDF2',
+                false,
+                ['deriveKey']
+            );
+            const derivedKey = await crypto.subtle.deriveKey(
+                {
+                    name: 'PBKDF2',
+                    salt: encoder.encode(salt),
+                    iterations: 600000,
+                    hash: 'SHA-256'
+                },
+                baseKey,
+                { name: 'AES-GCM', length: 256 },
+                false,
+                ['decrypt']
+            );
+            
+            const combined = Uint8Array.from(atob(cipherBase64), c => c.charCodeAt(0));
+            const iv = combined.slice(0, 12);
+            const encrypted = combined.slice(12);
+            
+            const decrypted = await crypto.subtle.decrypt(
+                { name: 'AES-GCM', iv: iv },
+                derivedKey,
+                encrypted
+            );
+            return new TextDecoder().decode(decrypted);
+        }
+    </script>
+
+</body>
+</html>
