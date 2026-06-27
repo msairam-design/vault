@@ -20,6 +20,7 @@ async function renderVaults() {
     container.innerHTML = '<div class="empty-state">Loading...</div>';
 
     try {
+        // 1. Fetch vaults OWNED by the user
         const { data: ownVaults, error: ownError } = await supabase
             .from('vaults')
             .select('*')
@@ -27,39 +28,36 @@ async function renderVaults() {
             .order('created_at', { ascending: false });
         if (ownError) throw ownError;
 
+        // 2. Fetch SHARED vaults with PERMISSIONS
         const currentUserEmail = currentUser.email;
         const { data: shareRecords, error: shareError } = await supabase
             .from('vault_shares')
-            .select('vault_id')
+            .select('vault_id, permission')
             .eq('shared_with_email', currentUserEmail);
         if (shareError) throw shareError;
 
+        // Create a map: vault_id -> permission string (e.g., 'CRU')
+        const permissionMap = {};
+        if (shareRecords) {
+            shareRecords.forEach(record => {
+                permissionMap[record.vault_id] = record.permission || 'R';
+            });
+        }
+
+        // 3. Fetch details for shared vaults
         let sharedVaults = [];
-        if (shareRecords && shareRecords.length > 0) {
-            const sharedIds = shareRecords.map(r => r.vault_id);
-            if (sharedIds.length > 0) {
-                const { data: sharedData, error: sharedDataError } = await supabase
-                    .from('vaults')
-                    .select('*')
-                    .in('id', sharedIds)
-                    .order('created_at', { ascending: false });
-                if (sharedDataError) throw sharedDataError;
-                sharedVaults = sharedData || [];
-            }
+        const sharedIds = Object.keys(permissionMap);
+        if (sharedIds.length > 0) {
+            const { data: sharedData, error: sharedDataError } = await supabase
+                .from('vaults')
+                .select('*')
+                .in('id', sharedIds)
+                .order('created_at', { ascending: false });
+            if (sharedDataError) throw sharedDataError;
+            sharedVaults = sharedData || [];
         }
 
-        const ownVaultIds = ownVaults?.map(v => v.id) || [];
-        let ownerShares = [];
-        if (ownVaultIds.length > 0) {
-            const { data: sharesMade, error: sharesMadeError } = await supabase
-                .from('vault_shares')
-                .select('vault_id')
-                .in('vault_id', ownVaultIds);
-            if (!sharesMadeError) {
-                ownerShares = sharesMade || [];
-            }
-        }
-
+        // 4. Merge all vaults
         const allVaults = [...(ownVaults || [])];
         const ownIds = new Set(ownVaults?.map(v => v.id) || []);
         for (let v of sharedVaults) {
@@ -73,11 +71,27 @@ async function renderVaults() {
             return;
         }
 
+        // 5. Fetch shares made by the user (to display "Shared" badge)
+        const ownVaultIds = ownVaults?.map(v => v.id) || [];
+        let ownerShares = [];
+        if (ownVaultIds.length > 0) {
+            const { data: sharesMade, error: sharesMadeError } = await supabase
+                .from('vault_shares')
+                .select('vault_id')
+                .in('vault_id', ownVaultIds);
+            if (!sharesMadeError) {
+                ownerShares = sharesMade || [];
+            }
+        }
         const sharedVaultIds = new Set(ownerShares.map(s => s.vault_id));
-        let html = '';
 
+        // 6. Render
+        let html = '';
         for (let vault of allVaults) {
             const isOwner = vault.user_id === currentUser.id;
+            const perm = permissionMap[vault.id] || '';
+            
+            // Determine badge
             let badgeText = '';
             if (isOwner) {
                 badgeText = sharedVaultIds.has(vault.id) ? '🔗 Shared' : '🔒 Private';
@@ -87,6 +101,11 @@ async function renderVaults() {
             }
 
             const safeVaultName = safeHtml(vault.name);
+            
+            // Determine which buttons to show based on permissions
+            const canAdd = isOwner || perm.includes('C');
+            const canShare = isOwner || perm.includes('S');
+            const canDeleteVault = isOwner; // Only owner can delete the vault itself
 
             html += `<div class="vault-card">
                 <div class="vault-header" data-vault-id="${vault.id}">
@@ -95,9 +114,9 @@ async function renderVaults() {
                         <span class="vault-badge">${badgeText}</span>
                     </div>
                     <div class="vault-actions">
-                        ${isOwner ? `<button class="share-btn" data-vault-id="${vault.id}" data-vault-name="${safeVaultName}">Share</button>` : ''}
-                        ${isOwner ? `<button class="add-item-btn" data-vault-id="${vault.id}">+ Add</button>` : ''}
-                        ${isOwner ? `<button class="delete-vault-btn" data-vault-id="${vault.id}" style="background:#ef4444;">✕</button>` : ''}
+                        ${canShare ? `<button class="share-btn" data-vault-id="${vault.id}" data-vault-name="${safeVaultName}">Share</button>` : ''}
+                        ${canAdd ? `<button class="add-item-btn" data-vault-id="${vault.id}">+ Add</button>` : ''}
+                        ${canDeleteVault ? `<button class="delete-vault-btn" data-vault-id="${vault.id}" style="background:#ef4444;">✕</button>` : ''}
                     </div>
                 </div>
                 <div class="vault-items" id="items-${vault.id}">
@@ -137,6 +156,21 @@ async function toggleVault(vaultId) {
         return;
     }
 
+    // Get the current user's permissions for this vault
+    const currentUserEmail = currentUser.email;
+    const { data: shareRecord } = await supabase
+        .from('vault_shares')
+        .select('permission')
+        .eq('vault_id', vaultId)
+        .eq('shared_with_email', currentUserEmail)
+        .single();
+    
+    const perm = shareRecord?.permission || '';
+    const isOwner = (await supabase.from('vaults').select('user_id').eq('id', vaultId).single()).data?.user_id === currentUser.id;
+    
+    const canEdit = isOwner || perm.includes('U');
+    const canDelete = isOwner || perm.includes('D');
+
     let html = '';
     items.forEach(item => {
         const label = item.secret_label || 'Unknown';
@@ -153,8 +187,8 @@ async function toggleVault(vaultId) {
             </div>
             <div class="pw-actions">
                 <button class="show-btn" data-item-id="${item.id}" data-label="${safeLabel}">Show</button>
-                <button class="edit-btn" data-item-id="${item.id}" style="background:#f59e0b;">✏️</button>
-                <button class="del-btn" data-item-id="${item.id}">✕</button>
+                ${canEdit ? `<button class="edit-btn" data-item-id="${item.id}" style="background:#f59e0b;">✏️</button>` : ''}
+                ${canDelete ? `<button class="del-btn" data-item-id="${item.id}">✕</button>` : ''}
             </div>
         </div>`;
     });

@@ -50,6 +50,9 @@ function cancelShare() {
     showDashboard();
 }
 
+// --- FIX: Expose removeShare globally so ui.js can call it ---
+window.removeShare = removeShare;
+
 // --- CREATE VAULT ---
 async function createVault() {
     const name = document.getElementById('vault-name').value.trim();
@@ -530,6 +533,14 @@ function showShareVault(vaultId, vaultName) {
     currentEditVaultId = vaultId;
     document.getElementById('share-vault-name').innerText = `Sharing: ${vaultName}`;
     document.getElementById('share-email-input').value = '';
+    
+    // Reset checkboxes (default: C, R, U are checked; D and S are unchecked)
+    document.getElementById('perm-c').checked = true;
+    document.getElementById('perm-r').checked = true;
+    document.getElementById('perm-u').checked = true;
+    document.getElementById('perm-d').checked = false;
+    document.getElementById('perm-s').checked = false;
+    
     loadSharedUsers(vaultId);
     showScreen('share-vault-screen');
 }
@@ -540,7 +551,7 @@ async function loadSharedUsers(vaultId) {
     
     const { data, error } = await supabase
         .from('vault_shares')
-        .select('id, shared_with_email')
+        .select('id, shared_with_email, permission')
         .eq('vault_id', vaultId);
 
     if (error) {
@@ -557,21 +568,48 @@ async function loadSharedUsers(vaultId) {
     container.innerHTML = '';
     data.forEach(share => {
         const email = share.shared_with_email || 'Unknown';
-        const span = document.createElement('span');
-        span.className = 'shared-user-tag';
-        span.textContent = email + ' ';
+        const perm = share.permission || 'R';
         
-        const removeSpan = document.createElement('span');
-        removeSpan.className = 'remove-share';
-        removeSpan.textContent = '✕';
-        removeSpan.dataset.shareId = share.id;
-        removeSpan.style.cursor = 'pointer';
-        removeSpan.style.marginLeft = '6px';
-        removeSpan.style.fontWeight = 'bold';
-        removeSpan.style.color = '#ef4444';
+        const div = document.createElement('div');
+        div.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid var(--border);';
         
-        span.appendChild(removeSpan);
-        container.appendChild(span);
+        const emailSpan = document.createElement('span');
+        emailSpan.textContent = email;
+        emailSpan.style.fontWeight = '500';
+        
+        const permSpan = document.createElement('span');
+        permSpan.textContent = `Permissions: ${perm}`;
+        permSpan.style.cssText = 'font-size:12px; color:var(--subtext); margin:0 8px;';
+        
+        const actionsDiv = document.createElement('div');
+        actionsDiv.style.cssText = 'display:flex; gap:6px;';
+        
+        // Edit permissions button
+        const editBtn = document.createElement('button');
+        editBtn.textContent = '✏️';
+        editBtn.style.cssText = 'background:var(--btn-warning); color:white; border:none; border-radius:4px; padding:2px 8px; cursor:pointer; font-size:12px;';
+        editBtn.onclick = function(e) {
+            e.stopPropagation();
+            editSharePermissions(share.id, share.shared_with_email, share.permission);
+        };
+        
+        // Remove button
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = '✕';
+        removeBtn.style.cssText = 'background:var(--btn-danger); color:white; border:none; border-radius:4px; padding:2px 8px; cursor:pointer; font-size:12px;';
+        removeBtn.dataset.shareId = share.id;
+        removeBtn.onclick = function(e) {
+            e.stopPropagation();
+            removeShare(share.id);
+        };
+        
+        actionsDiv.appendChild(editBtn);
+        actionsDiv.appendChild(removeBtn);
+        
+        div.appendChild(emailSpan);
+        div.appendChild(permSpan);
+        div.appendChild(actionsDiv);
+        container.appendChild(div);
     });
 }
 
@@ -586,11 +624,22 @@ async function addShare() {
         alert('Please enter a valid email address.');
         return;
     }
-
+    
+    // Build permission string from checkboxes
+    const c = document.getElementById('perm-c').checked;
+    const u = document.getElementById('perm-u').checked;
+    const d = document.getElementById('perm-d').checked;
+    const s = document.getElementById('perm-s').checked;
+    let permission = 'R'; // R is always on
+    if (c) permission += 'C';
+    if (u) permission += 'U';
+    if (d) permission += 'D';
+    if (s) permission += 'S';
+    
     const { error } = await supabase.from('vault_shares').insert({
         vault_id: currentEditVaultId,
         shared_with_email: email,
-        permission: 'read'
+        permission: permission
     });
 
     if (error) {
@@ -600,6 +649,75 @@ async function addShare() {
 
     document.getElementById('share-email-input').value = '';
     loadSharedUsers(currentEditVaultId);
+}
+
+// --- Edit Share Permissions ---
+async function editSharePermissions(shareId, email, currentPerm) {
+    // Build a list of checkboxes for C, R, U, D, S
+    const permMap = { 'C': false, 'R': false, 'U': false, 'D': false, 'S': false };
+    for (const char of currentPerm) {
+        if (char in permMap) permMap[char] = true;
+    }
+    
+    const newPerm = await new Promise((resolve) => {
+        const modal = document.createElement('div');
+        modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); display:flex; justify-content:center; align-items:center; z-index:1000;';
+        
+        const box = document.createElement('div');
+        box.style.cssText = 'background:var(--app-bg); padding:20px; border-radius:12px; max-width:400px; width:90%; color:var(--text);';
+        box.innerHTML = `
+            <h3>Edit Permissions for ${email}</h3>
+            <div style="margin:12px 0;">
+                <label><input type="checkbox" id="edit-perm-c" ${permMap['C'] ? 'checked' : ''}> C (Create)</label><br>
+                <label><input type="checkbox" id="edit-perm-r" ${permMap['R'] ? 'checked' : ''} disabled> R (Read - Always On)</label><br>
+                <label><input type="checkbox" id="edit-perm-u" ${permMap['U'] ? 'checked' : ''}> U (Update)</label><br>
+                <label><input type="checkbox" id="edit-perm-d" ${permMap['D'] ? 'checked' : ''}> D (Delete)</label><br>
+                <label><input type="checkbox" id="edit-perm-s" ${permMap['S'] ? 'checked' : ''}> S (Share)</label><br>
+            </div>
+            <div class="button-row">
+                <button id="edit-perm-cancel" class="cancel-btn">Cancel</button>
+                <button id="edit-perm-save">Save</button>
+            </div>
+        `;
+        modal.appendChild(box);
+        document.body.appendChild(modal);
+        
+        document.getElementById('edit-perm-cancel').onclick = () => {
+            document.body.removeChild(modal);
+            resolve(null);
+        };
+        document.getElementById('edit-perm-save').onclick = () => {
+            const c = document.getElementById('edit-perm-c').checked;
+            const u = document.getElementById('edit-perm-u').checked;
+            const d = document.getElementById('edit-perm-d').checked;
+            const s = document.getElementById('edit-perm-s').checked;
+            let perm = 'R'; // R is always on
+            if (c) perm += 'C';
+            if (u) perm += 'U';
+            if (d) perm += 'D';
+            if (s) perm += 'S';
+            document.body.removeChild(modal);
+            resolve(perm);
+        };
+    });
+    
+    if (newPerm && newPerm !== currentPerm) {
+        await updateSharePermissions(shareId, newPerm);
+    }
+}
+
+async function updateSharePermissions(shareId, newPermissions) {
+    const { error } = await supabase
+        .from('vault_shares')
+        .update({ permission: newPermissions })
+        .eq('id', shareId);
+    
+    if (error) {
+        alert('Error updating permissions: ' + error.message);
+    } else {
+        alert('✅ Permissions updated successfully!');
+        loadSharedUsers(currentEditVaultId);
+    }
 }
 
 async function removeShare(shareId) {
