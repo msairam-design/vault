@@ -616,7 +616,7 @@ async function loadSharedUsers(vaultId) {
             editBtn.style.cssText = 'background:var(--btn-warning); color:white; border:none; border-radius:4px; padding:2px 8px; cursor:pointer; font-size:12px;';
             editBtn.onclick = function(e) {
                 e.stopPropagation();
-                editSharePermissions(shareId, email, perm);
+                editSharePermissions(shareId, email);
             };
             
             const removeBtn = document.createElement('button');
@@ -677,8 +677,22 @@ async function addShare() {
 }
 
 // --- Edit Share Permissions ---
-async function editSharePermissions(shareId, email, currentPerm) {
-    // Build a list of checkboxes for C, R, U, D, S
+async function editSharePermissions(shareId, email) {
+    // --- Fetch the latest permission from the database ---
+    const { data, error } = await supabase
+        .from('vault_shares')
+        .select('permission')
+        .eq('id', shareId)
+        .single();
+    
+    if (error) {
+        alert('Error fetching current permissions: ' + error.message);
+        return;
+    }
+    
+    const currentPerm = data?.permission || 'R';
+    
+    // Build the modal with currentPerm
     const permMap = { 'C': false, 'R': false, 'U': false, 'D': false, 'S': false };
     for (const char of currentPerm) {
         if (char in permMap) permMap[char] = true;
@@ -686,6 +700,7 @@ async function editSharePermissions(shareId, email, currentPerm) {
     
     const newPerm = await new Promise((resolve) => {
         const modal = document.createElement('div');
+        modal.className = 'dynamic-modal'; // Add class for cleanup
         modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); display:flex; justify-content:center; align-items:center; z-index:1000;';
         
         const box = document.createElement('div');
@@ -716,7 +731,7 @@ async function editSharePermissions(shareId, email, currentPerm) {
             const u = document.getElementById('edit-perm-u').checked;
             const d = document.getElementById('edit-perm-d').checked;
             const s = document.getElementById('edit-perm-s').checked;
-            let perm = 'R'; // R is always on
+            let perm = 'R';
             if (c) perm += 'C';
             if (u) perm += 'U';
             if (d) perm += 'D';
@@ -728,6 +743,8 @@ async function editSharePermissions(shareId, email, currentPerm) {
     
     if (newPerm && newPerm !== currentPerm) {
         await updateSharePermissions(shareId, newPerm);
+    } else if (newPerm && newPerm === currentPerm) {
+        alert('No changes made to permissions.');
     }
 }
 
